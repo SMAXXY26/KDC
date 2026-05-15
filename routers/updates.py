@@ -1,4 +1,3 @@
-# routers/updates.py
 import logging
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator

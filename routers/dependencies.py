@@ -1,4 +1,3 @@
-# routers/dependencies.py
 import logging
 from fastapi import Request, HTTPException
 from database import get_db
@@ -6,10 +5,9 @@ from database import get_db
 log = logging.getLogger(__name__)
 
 def get_authenticated_device(request: Request) -> str:
-    # ── 1. Extract the client certificate ────────────────────────────────────
     ssl_object = request.scope.get("transport")
     log.debug(f"Transport: {ssl_object}")
-    
+
     if ssl_object is None:
         log.warning("No TLS connection")
         raise HTTPException(status_code=401, detail="No TLS connection")

@@ -1,4 +1,3 @@
-# routers/registration.py
 import logging
 import os
 import re
@@ -37,7 +36,6 @@ class RegistrationRequest(BaseModel):
 
 
 def issue_cert(public_key, serial: int, device_id: str) -> bytes:
-    """Issue a cert directly from a public key — no CSR needed."""
     ca_key, ca_cert = load_ca()
 
     cert = (
@@ -75,18 +73,15 @@ async def register_device(req: RegistrationRequest, request: Request):
     MASTER_SECRET = bytes.fromhex(os.environ["MASTER_SECRET_HEX"])
     FLEET_SALT    = bytes.fromhex(os.environ["FLEET_SALT_HEX"])
 
-    # ── 1. Consume the one-time token ─────────────────────────────────────────
     token_row = consume_token(req.token, client_ip)
     if not token_row:
         log.warning(f"Registration rejected: invalid/used token from {client_ip} for {req.device_id}")
         raise HTTPException(status_code=401, detail="Invalid or expired provisioning token")
 
-    # ── 2. Verify device_id matches token ─────────────────────────────────────
     if token_row["device_id"] != req.device_id:
         log.warning(f"device_id mismatch: token for {token_row['device_id']}, got {req.device_id}")
         raise HTTPException(status_code=401, detail="Invalid or expired provisioning token")
 
-    # ── 3. Check not already registered ──────────────────────────────────────
     with get_db() as conn:
         existing = conn.execute(
             "SELECT device_id FROM devices WHERE device_id = ?", (req.device_id,)
@@ -95,11 +90,7 @@ async def register_device(req: RegistrationRequest, request: Request):
         log.warning(f"Re-registration attempt for existing device {req.device_id}")
         raise HTTPException(status_code=409, detail="Device already registered")
 
-    # ── 4. Derive device keypair from token using HKDF ────────────────────────
-    # Token is used as the provisional key — both sides have it
-    # Server derives the keypair, Pi receives only the cert (public side)
     try:
-        token_bytes   = req.token.encode()
         device_root   = derive_device_root(MASTER_SECRET, FLEET_SALT, req.device_id)
         signing_bytes = derive_purpose_key(device_root, "sign", version=1)
         private_key   = Ed25519PrivateKey.from_private_bytes(signing_bytes)
@@ -109,7 +100,6 @@ async def register_device(req: RegistrationRequest, request: Request):
         log.exception(f"Key derivation failed for {req.device_id}")
         raise HTTPException(status_code=500, detail="Key derivation failed")
 
-    # ── 5. Issue certificate ──────────────────────────────────────────────────
     try:
         with get_db() as conn:
             serial   = next_cert_serial(conn)
@@ -135,7 +125,6 @@ async def register_device(req: RegistrationRequest, request: Request):
 
     log.info(f"Device registered: {req.device_id} from {client_ip} (serial {serial})")
 
-    # ── 6. Return cert + CA cert + TUF root to Pi ─────────────────────────────
     ca_cert_pem   = Path("certs/ca.crt").read_text()
     tuf_root_path = Path("tuf/metadata/root.json")
     tuf_root      = tuf_root_path.read_text() if tuf_root_path.exists() else None

@@ -1,21 +1,14 @@
-# main.py
 import ssl
 import sys
 import logging
 import uvicorn
 from uvicorn.protocols.http.httptools_impl import HttpToolsProtocol
 
-# ── Monkey-patch: expose the asyncio transport in scope ──────────────────────
-# Uvicorn does not put 'transport' into the ASGI scope.
-# We CANNOT patch connection_made() — self.scope is still None at that point.
-# Instead we patch on_message_begin(), which is where self.scope is created
-# (see httptools_impl.py line ~230).  After the original builds the scope dict,
-# we inject self.transport so handlers can reach ssl_object → getpeercert().
 _orig_on_message_begin = HttpToolsProtocol.on_message_begin
 
 def _patched_on_message_begin(self):
     _orig_on_message_begin(self)
-    self.scope["transport"] = self.transport     # now visible to handlers
+    self.scope["transport"] = self.transport
 
 HttpToolsProtocol.on_message_begin = _patched_on_message_begin
 from fastapi import FastAPI

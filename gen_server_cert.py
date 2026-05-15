@@ -1,4 +1,3 @@
-# gen_server_cert.py — run once to generate the server certificate
 from pathlib import Path
 import datetime
 from cryptography import x509
@@ -28,7 +27,7 @@ def gen_server_cert():
         .public_key(server_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.now(datetime.UTC))
-.not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
         .add_extension(
             x509.SubjectAlternativeName([
                 x509.DNSName("localhost"),
@@ -47,7 +46,6 @@ def gen_server_cert():
         .sign(ca_key, None)
     )
 
-    # Save server key
     server_key_path = CERTS_DIR / "server.key"
     server_key_path.write_bytes(
         server_key.private_bytes(
@@ -58,7 +56,6 @@ def gen_server_cert():
     )
     server_key_path.chmod(0o400)
 
-    # Save server cert
     server_cert_path = CERTS_DIR / "server.crt"
     server_cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 

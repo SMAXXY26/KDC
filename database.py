@@ -1,4 +1,3 @@
-# database.py
 import sqlite3
 import secrets
 from datetime import datetime, timedelta
@@ -12,13 +11,13 @@ CREATE TABLE IF NOT EXISTS provision_tokens (
     device_id       TEXT UNIQUE NOT NULL,
     created_at      TEXT NOT NULL,
     expires_at      TEXT NOT NULL,
-    used_at         TEXT,          -- NULL = unused
+    used_at         TEXT,
     used_by_ip      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS devices (
     device_id       TEXT PRIMARY KEY,
-    status          TEXT NOT NULL DEFAULT 'active',  -- active | revoked | suspended
+    status          TEXT NOT NULL DEFAULT 'active',
     cert_serial     INTEGER NOT NULL,
     cert_pem        TEXT NOT NULL,
     public_key_hex  TEXT NOT NULL,
@@ -38,7 +37,7 @@ CREATE TABLE IF NOT EXISTS cert_serials (
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")  # safe for concurrent reads
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
@@ -54,7 +53,6 @@ def init_db():
         conn.executescript(SCHEMA)
 
 def create_provision_token(device_id: str, ttl_hours: int = 24) -> str:
-    """Generate a one-time token for a specific device_id."""
     token = secrets.token_urlsafe(32)
     now = datetime.utcnow()
     expires = now + timedelta(hours=ttl_hours)
@@ -72,10 +70,6 @@ def create_provision_token(device_id: str, ttl_hours: int = 24) -> str:
     return token
 
 def consume_token(token: str, ip: str) -> sqlite3.Row | None:
-    """
-    Atomically validate and consume a token.
-    Returns the token row if valid, None if invalid/used/expired.
-    """
     now = datetime.utcnow().isoformat()
     with get_db() as conn:
         row = conn.execute("""
@@ -88,14 +82,12 @@ def consume_token(token: str, ip: str) -> sqlite3.Row | None:
         if not row:
             return None
 
-        # Mark used atomically — prevents race condition double-registration
         conn.execute("""
             UPDATE provision_tokens
             SET used_at = ?, used_by_ip = ?
             WHERE token = ? AND used_at IS NULL
         """, (now, ip, token))
 
-        # Verify exactly one row was updated (not zero — means race condition lost)
         if conn.execute("SELECT changes()").fetchone()[0] == 0:
             return None
 

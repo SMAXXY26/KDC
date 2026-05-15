@@ -1,4 +1,3 @@
-# tuf_timestamp.py
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from cryptography.hazmat.primitives import serialization

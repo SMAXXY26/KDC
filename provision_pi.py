@@ -1,4 +1,3 @@
-# pi/provision.py — run once to register the device with the server
 import os
 import json
 import ssl
@@ -11,13 +10,11 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-# ── Config from environment ───────────────────────────────────────────────────
 SERVER_URL = os.environ.get("OTA_SERVER", "https://localhost:8443")
 OTA_DIR    = Path(os.environ.get("OTA_DIR", "test-device"))
 TOKEN      = os.environ.get("PROVISION_TOKEN")
 DEVICE_ID  = os.environ.get("DEVICE_ID")
 
-# ── File paths ────────────────────────────────────────────────────────────────
 KEY_PATH      = OTA_DIR / "device.key"
 CERT_PATH     = OTA_DIR / "device.crt"
 CA_CERT_PATH  = OTA_DIR / "ca.crt"
@@ -38,7 +35,6 @@ def register(token: str, device_id: str) -> dict:
         method="POST",
     )
 
-    # Skip SSL verification for local testing only
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -66,14 +62,13 @@ def main():
 
     result = register(TOKEN, DEVICE_ID)
 
-    # ── Store everything the Pi needs ─────────────────────────────────────────
     OTA_DIR.mkdir(parents=True, exist_ok=True)
     KEY_PATH.write_text(result["private_key_pem"])
     CERT_PATH.write_text(result["cert_pem"])
     CA_CERT_PATH.write_text(result["ca_cert_pem"])
     TUF_ROOT_PATH.write_text(result["tuf_root"])
 
-    KEY_PATH.chmod(0o400)   # owner read only — most restrictive
+    KEY_PATH.chmod(0o400)
     CERT_PATH.chmod(0o444)
     CA_CERT_PATH.chmod(0o444)
     TUF_ROOT_PATH.chmod(0o444)

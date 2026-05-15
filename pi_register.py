@@ -1,4 +1,3 @@
-# pi_register.py — run this once on the Pi to register with the fleet server
 import os
 import sys
 import requests
@@ -36,7 +35,7 @@ def build_csr(private_key: Ed25519PrivateKey, device_id: str) -> bytes:
         .subject_name(x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, device_id),
         ]))
-        .sign(private_key, None)  # Ed25519 — no hash algorithm needed
+        .sign(private_key, None)
     )
     return csr.public_bytes(serialization.Encoding.PEM)
 
