@@ -1,62 +1,91 @@
-# provision_pi.py — generates token + device key and writes them to the Pi over SSH
-# Usage: python provision_pi.py <device_id> <pi_host> [--user pi]
-import sys
-import subprocess
-from dotenv import load_dotenv
+# pi/provision.py — run once to register the device with the server
 import os
+import json
+import ssl
+import logging
+import urllib.request
+import urllib.error
+from pathlib import Path
 
-load_dotenv()
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(levelname)s: %(message)s")
+log = logging.getLogger(__name__)
 
-def run(cmd: str, input: str = None):
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, input=input)
-    if result.returncode != 0:
-        sys.exit(f"Command failed: {cmd}\n{result.stderr}")
-    return result.stdout.strip()
+# ── Config from environment ───────────────────────────────────────────────────
+SERVER_URL = os.environ.get("OTA_SERVER", "https://localhost:8443")
+OTA_DIR    = Path(os.environ.get("OTA_DIR", "test-device"))
+TOKEN      = os.environ.get("PROVISION_TOKEN")
+DEVICE_ID  = os.environ.get("DEVICE_ID")
 
-def ssh(host: str, user: str, command: str, input: str = None):
-    result = subprocess.run(
-        ["ssh", f"{user}@{host}", command],
-        capture_output=True, text=True, input=input
+# ── File paths ────────────────────────────────────────────────────────────────
+KEY_PATH      = OTA_DIR / "device.key"
+CERT_PATH     = OTA_DIR / "device.crt"
+CA_CERT_PATH  = OTA_DIR / "ca.crt"
+TUF_ROOT_PATH = OTA_DIR / "tuf_root.json"
+DONE_MARKER   = OTA_DIR / ".provisioned"
+
+
+def register(token: str, device_id: str) -> dict:
+    payload = json.dumps({
+        "token":     token,
+        "device_id": device_id,
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{SERVER_URL}/v1/register",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
-    if result.returncode != 0:
-        sys.exit(f"SSH command failed: {command}\n{result.stderr}")
-    return result.stdout.strip()
+
+    # Skip SSL verification for local testing only
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        log.error(f"Registration failed {e.code}: {body}")
+        raise
+
 
 def main():
-    args = sys.argv[1:]
-    if len(args) < 2:
-        sys.exit("Usage: python provision_pi.py <device_id> <pi_host> [--user pi]")
+    if DONE_MARKER.exists():
+        log.info("Already provisioned. Delete test-device/.provisioned to re-run.")
+        return
 
-    device_id = args[0]
-    pi_host   = args[1]
-    pi_user   = args[args.index("--user") + 1] if "--user" in args else "pi"
+    if not TOKEN or not DEVICE_ID:
+        log.error("PROVISION_TOKEN and DEVICE_ID must be set")
+        raise SystemExit(1)
 
-    # Derive keys on the server side
-    from kdc import derive_device_root, derive_purpose_key
-    from database import init_db, create_provision_token
+    log.info(f"Provisioning device: {DEVICE_ID}")
+    log.info("Sending registration request...")
 
-    master = bytes.fromhex(os.environ["MASTER_SECRET_HEX"])
-    salt   = bytes.fromhex(os.environ["FLEET_SALT_HEX"])
-    root   = derive_device_root(master, salt, device_id)
-    key_hex = derive_purpose_key(root, "sign", version=1).hex()
+    result = register(TOKEN, DEVICE_ID)
 
-    init_db()
-    token = create_provision_token(device_id, ttl_hours=24)
+    # ── Store everything the Pi needs ─────────────────────────────────────────
+    OTA_DIR.mkdir(parents=True, exist_ok=True)
+    KEY_PATH.write_text(result["private_key_pem"])
+    CERT_PATH.write_text(result["cert_pem"])
+    CA_CERT_PATH.write_text(result["ca_cert_pem"])
+    TUF_ROOT_PATH.write_text(result["tuf_root"])
 
-    print(f"Token and key derived for {device_id}. Writing to {pi_user}@{pi_host} ...")
+    KEY_PATH.chmod(0o400)   # owner read only — most restrictive
+    CERT_PATH.chmod(0o444)
+    CA_CERT_PATH.chmod(0o444)
+    TUF_ROOT_PATH.chmod(0o444)
 
-    # Write files on the Pi
-    ssh(pi_host, pi_user, "sudo mkdir -p /etc/ota")
-    ssh(pi_host, pi_user,
-        f"printf 'PROVISION_TOKEN={token}\\nDEVICE_ID={device_id}\\n' | sudo tee /etc/ota/provision.env > /dev/null")
-    ssh(pi_host, pi_user,
-        f"echo 'DEVICE_SIGNING_KEY_HEX={key_hex}' | sudo tee /etc/ota/device.env > /dev/null")
+    DONE_MARKER.write_text(DEVICE_ID)
 
-    # Lock down permissions
-    ssh(pi_host, pi_user, "sudo chmod 600 /etc/ota/provision.env /etc/ota/device.env")
+    log.info("Provisioned successfully.")
+    log.info(f"  Key:      {KEY_PATH}")
+    log.info(f"  Cert:     {CERT_PATH}")
+    log.info(f"  CA cert:  {CA_CERT_PATH}")
+    log.info(f"  TUF root: {TUF_ROOT_PATH}")
 
-    print(f"Done. Files written to /etc/ota/ on the Pi.")
-    print(f"Run on Pi: OTA_SERVER_URL=http://10.42.0.1:8443 python pi_register.py")
 
 if __name__ == "__main__":
     main()
