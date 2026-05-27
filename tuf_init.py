@@ -1,3 +1,4 @@
+# tuf_init.py
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
@@ -29,9 +30,26 @@ if __name__ == "__main__":
     KEYS_DIR.mkdir(parents=True, exist_ok=True)
     KEYS_DIR.chmod(0o700)
 
-    print("Generating role keys...")
-    root_private      = generate_key("root")
-    targets_private   = generate_key("targets")
-    snapshot_private  = generate_key("snapshot")
-    timestamp_private = generate_key("timestamp")
-    print("Done.")
+    print("=== Step 1: Generating role keys ===")
+    generate_key("root")
+    generate_key("targets")
+    generate_key("snapshot")
+    generate_key("timestamp")
+
+    print("\n=== Step 2: Building root.json ===")
+    from tuf_root import build_root
+    build_root()
+
+    print("\n=== Step 3: Building targets.json ===")
+    from tuf_targets import build_targets
+    build_targets()
+
+    print("\n=== Step 4: Building snapshot.json ===")
+    from tuf_snapshot import build_snapshot
+    build_snapshot()
+
+    print("\n=== Step 5: Building timestamp.json ===")
+    from tuf_timestamp import build_timestamp
+    build_timestamp()
+
+    print("\n=== TUF setup complete ===")

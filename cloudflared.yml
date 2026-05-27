@@ -1,0 +1,26 @@
+# Cloudflare Tunnel configuration
+# ---------------------------------------------------------------
+# Run once to create the tunnel and get the credentials file:
+#   cloudflared tunnel login
+#   cloudflared tunnel create ota-fleet
+#   cloudflared tunnel route dns ota-fleet ota.yourdomain.com
+#
+# Then start the tunnel:
+#   cloudflared tunnel --config cloudflared.yml run
+#
+# Update SERVER_URL in .env to match your chosen hostname.
+# ---------------------------------------------------------------
+
+tunnel: ota-fleet
+credentials-file: ~/.cloudflared/ota-fleet.json
+
+ingress:
+  # All traffic for your domain is forwarded to the plain HTTP origin server.
+  # Cloudflare terminates external TLS; cloudflared re-connects here over HTTP.
+  # Devices connecting via this route authenticate using Ed25519 header signatures
+  # (X-Device-ID, X-Device-Ts, X-Device-Sig) instead of mTLS client certs.
+  - hostname: ota.yourdomain.com
+    service: http://127.0.0.1:8080
+
+  # Catch-all required by cloudflared
+  - service: http_status:404

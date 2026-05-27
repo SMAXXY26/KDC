@@ -1,15 +1,22 @@
-# Secrets
+# ── Secrets & credentials ─────────────────────────────────────────────────────
 .env
+*.json           # cloudflared tunnel credentials
 certs/
 *.key
 *.pem
+*.crt
+*.csr
+*.srl
 
-# Database
+# ── Database ──────────────────────────────────────────────────────────────────
 ota.db
 ota.db-wal
 ota.db-shm
 
-# Python
+# ── TUF (generated metadata, keys, artifacts) ────────────────────────────────
+tuf/
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
@@ -21,16 +28,21 @@ build/
 .venv/
 env/
 
-# Jupyter
+# ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
 
-# TUF metadata (generated)
-tuf/
+# ── Rust build artifacts ──────────────────────────────────────────────────────
+target/
+learn
 
-# OS
+# ── OS junk ───────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-tuf/keys/
-certs/ca.key
-.env
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

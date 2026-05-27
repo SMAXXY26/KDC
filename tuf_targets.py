@@ -21,23 +21,23 @@ def build_targets():
     print("Building targets.json...")
     targets = Targets(expires=datetime.now(timezone.utc) + timedelta(days=90))
 
-    artifact = ARTIFACTS_DIR / "app-v1.0.0.py"
+    artifact = ARTIFACTS_DIR / "app-v1.0.1.py"
     if not artifact.exists():
         print(f"Artifact not found: {artifact}")
         return
 
     target_file = TargetFile.from_file(
-        target_file_path="app-v1.0.0.py",
+        target_file_path="app-v1.0.1.py",
         local_path=str(artifact),
     )
     target_file.unrecognized_fields["custom"] = {
-        "version":     "1.0.0",
+        "version":     "1.0.1",
         "hardware":    "rpi4",
         "task":        "cv-detection",
         "min_version": "0.0.0",
     }
 
-    targets.targets["app-v1.0.0.py"] = target_file
+    targets.targets["app-v1.0.1.py"] = target_file
 
     targets_md = Metadata(targets)
     targets_md.sign(targets_signer)
